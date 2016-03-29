@@ -1,0 +1,266 @@
+---
+title: "Capstone Milestone Report"
+author: "Makis Poulianidis"
+date: "19 maart 2016"
+output: html_document
+---
+## Summary
+This is a milestone report for Coursera's Data Science capstone project. One of the goals of the capstone project is to build a predictive text model. This model is to be used in a Shiny app that predicts the next word based on an input phrase. A dataset is provided for building the model. It consists of three files with text from tweets, blog posts and news feeds in several languages. This milestone report describes the results of exploratory analysis of the English data files from the  dataset.
+
+***
+The objectives for this milestone report is to: 
+
+*1. Demonstrate that you've downloaded the data and have successfully loaded it in.*
+
+*2. Create a basic report of summary statistics about the data sets.*
+
+*3. Report any interesting findings that you amassed so far.*
+
+*4. Get feedback on your plans for creating a prediction algorithm and Shiny app.*
+
+***
+## Download Dataset & Load Data
+First, call the libraries that will be used.
+```{r, libraries, message=FALSE, warning=FALSE}
+library(R.utils)
+library(knitr)
+library(stringi)
+library(tm)
+library(SnowballC)
+library(tau)
+library(wordcloud)
+```
+
+#### Download Dataset
+download the dataset, unzip it and report some basic stats of the individual files.
+```{r download}
+## set the file URLs
+fileUrl<-"https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+## check if the download file exist. Download only if it doesn't exist 
+if(!file.exists("./Coursera-SwiftKey.zip")) {download.file(fileUrl,destfile="Coursera-SwiftKey.zip",method="curl")}
+## check if the file is unzipped. Unpack only if it doesn't exist 
+if(!file.exists("./final/en_US")) unzip("./Capstone-SwiftKey.zip")
+## Get the file names from the directory
+file.names<-dir("./final/en_US")
+## Get the number of rows in the files 
+file.rows <- c(
+R.utils::countLines("./final/en_US/en_US.blogs.txt")[1],
+R.utils::countLines("./final/en_US/en_US.news.txt")[1],
+R.utils::countLines("./final/en_US/en_US.twitter.txt")[1])
+## Get the filesizes
+file.size <- c(
+file.info("./final/en_US/en_US.blogs.txt")$size,
+file.info("./final/en_US/en_US.news.txt")$size,
+file.info("./final/en_US/en_US.twitter.txt")$size)
+```
+After downloading and unzipping the dataset, there should be three files with English texts.
+A file ```en_US.blogs.txt``` containing the blog posts, ```en_US.news.txt``` with the news feeds, and ```en_US.twitter.txt``` with tweets. The following table shows the file sizes and number of lines/rows in the files:
+```{r table_files}
+kable(data.frame(file.names,file.size,file.rows), col.names = c("File Name", "File Size", "Number Of Rows in File"))
+```
+
+
+#### Load Data
+Load the data, turn warnings off.
+```{r readLines, warning=FALSE}
+## Load the data
+for (i in 1:length(file.names)) assign(file.names[i], readLines(paste0("./final/en_US/",file.names[i])))
+```
+
+Check the object size and number of lines per object.
+```{r object_sizes}
+## Get the object sizes 
+object.sizes <- c(
+object.size(en_US.blogs.txt),
+object.size(en_US.news.txt),
+object.size(en_US.twitter.txt))
+## Get the number of rows in the object 
+object.rows <- c(
+length(en_US.blogs.txt),
+length(en_US.news.txt),
+length(en_US.twitter.txt))
+```
+
+The following table shows the object sizes and number of lines/rows in the objects after loading the dataset into R:
+```{r table_objects}
+## summary in a table
+kable(data.frame(file.names,object.sizes,object.rows), col.names = c("Object Name", "Object Size", "Number Of Lines in Object"))
+```
+
+The number of lines in R is equal to the number rows in the files. It appears that all data has been loaded successfully. One striking difference however is the size of the twitter data. The file ```en_US.twitter.txt``` was the smallest of all three, but somehow doubles in size once loaded into R.
+
+## Summary Statistics
+From this point onward, the analysis is based on a random sample of 10% of the actual datasets.
+```{r sample}
+set.seed(1)
+blogs.sample<-sample(en_US.blogs.txt, size = length(en_US.blogs.txt)*0.1)
+news.sample<-sample(en_US.news.txt, size = length(en_US.news.txt)*0.1)
+twitter.sample<-sample(en_US.twitter.txt, size = length(en_US.twitter.txt)*0.1)
+```
+
+#### Data Cleaning
+Before generating some stats, the data will be cleaned. Use a small function for removing e-mail adresses, twitter accounts, non-alphanumeric characters (except single quotes) and convert all text to lowercase.
+```{r define_cleanData}
+cleanData <- function(text){
+        ## remove e-mail adresses
+        text <- gsub("[[:alnum:].-]+@[[:alnum:].-]+"," ",text ) 
+        ## remove twitter accounts
+        text <- gsub("@[^\\s]+", " ", text)
+        ## remove non-alphanumerics
+        text <- gsub("[^A-Za-z\']"," ",text)
+        ## remove extra whitespaces 
+        text <- gsub("\\s+"," ",text)
+        ## convert to lowercase
+        text <- tolower(text)
+        return(text)
+        }
+```
+
+Apply this function to the three sample sets.
+```{r apply_cleanData}
+blogs.sample<-cleanData(blogs.sample)
+news.sample<-cleanData(news.sample)
+twitter.sample<-cleanData(twitter.sample)
+```
+
+Define a function
+```{r define_stemData}
+stemData <- function(text){
+        corpus <- Corpus(VectorSource(text))
+        corpus.stem <- tm_map(corpus, stemDocument, language = "english")  
+        corpus.stop <- tm_map(corpus.stem, removeWords, stopwords("english")) 
+        corpus.strip <- tm_map(corpus.stop, stripWhitespace)
+        x<-data.frame(text=unlist(sapply(corpus.strip, `[`, "content")), stringsAsFactors=FALSE)$text
+        return(x)
+}
+```
+
+Again, apply this function to the three samples but store the results separately for further comparison.
+```{r apply_stemData}
+blogs.sample.stem<-stemData(blogs.sample)
+news.sample.stem<-stemData(news.sample)
+twitter.sample.stem<-stemData(twitter.sample)
+```
+
+#### Word Counts
+I am curious to see if the three datasources contain the same amount of unique words. The unique words count will drop if stopwords are removed and word stemming is applied, but how much, and will it drop evenly? I somehow expect the twitter data to hold the lowest number of unique words, being a "poor" subset of english.
+
+Generate some basic word using the ```stringi``` package. Use a function to generate word counts.
+```{r define_countWords}
+countWords <- function(text){
+        words <- unlist(stri_extract_all_words(text))
+        count <- as.character(length(words))
+        unique <- length(unique(words))
+        max <- max(stri_count_words(text))
+        mean <- round(mean(stri_count_words(text)),0)
+        median <-  median(stri_count_words(text))
+        name<-deparse(substitute(text))
+        x<-c(name,count,unique,max,mean,median)
+        return(x)
+        }
+```
+
+Apply this function to the original data samples, the stemmed samples, a combination of the news and blog samples and a combination of all samples.
+```{r apply_countWords}
+count.blogs.sample<-countWords(blogs.sample)
+count.blogs.stem<-countWords(blogs.sample.stem)
+count.news.sample<-countWords(news.sample)
+count.news.stem<-countWords(news.sample.stem)
+count.twitter.sample<-countWords(twitter.sample)
+count.twitter.stem<-countWords(twitter.sample.stem)
+blogs.news.sample <- c(blogs.sample, news.sample)
+blogs.news.sample.stem <- c(blogs.sample.stem, news.sample.stem)
+count.blogs.news.sample<-countWords(blogs.news.sample)
+count.blogs.news.stem<-countWords(blogs.news.sample.stem)
+total.sample <- c(blogs.sample, news.sample, twitter.sample)
+total.sample.stem <- c(blogs.sample.stem, news.sample.stem, twitter.sample.stem) 
+count.total.sample<-countWords(total.sample)
+count.total.stem<-countWords(total.sample.stem)
+```
+
+Print the results in a table
+```{r table_countWords}
+## summary in a table
+kable(data.frame(rbind(count.blogs.sample,count.blogs.stem,count.news.sample,count.news.stem,count.twitter.sample,count.twitter.stem,count.blogs.news.sample,count.blogs.news.stem,count.total.sample,count.total.stem),row.names=NULL), col.names= c("Dataset", "Nbr. of Words", "Unique Nbr. of Words", "Max Nbr. of Words", "Mean Nbr. of Words","Median Nbr. of Words"))
+```
+
+Again, it is the Twitter dataset that holds a surprise. It is the smallest dataset, yet *appears* to contain the highest number of unique words. However, if you look at the totals and the word counts of the combined news and blog samples, it becomes apparent that the twitter sample of almost 300.000 words adds "only" ca. 40.000 new unique words that were not present in the news and blog samples. Stemming and removing stop words does not reduce the number of unique words of the twitter sample as much as with the other samples. 
+
+#### N-Grams
+Define a function to create n-grams.
+```{r define_createNGram}
+createNGram <- function(text,n){
+                x<-textcnt(x = text, tolower = TRUE, 
+                method = "string", n = n, decreasing=TRUE)
+        return(x)
+}
+```
+
+Create uni-grams, di-grams, tri-grams and quadri-grams by applying the function to the combined sample set.
+
+```{r apply_createNGram}
+total.n1<-createNGram(total.sample,1)
+total.n2<-createNGram(total.sample,2)
+total.n3<-createNGram(total.sample,3)
+total.n4<-createNGram(total.sample,4)
+```
+
+Next, plot the results as wordclouds and barplots counting terms. In the Uni-Grams I expect to see high frequencies of a limited set of articles, pronouns, prepositions, conjunctions and some forms of the verbs "to be" and "to do". For Bi-Grams I expect to see high frequencies of combinations of the high-frequncy unigram terms. For higher level n-grams the maximum frequency should drop and the highest frequency group should become larger.
+
+#### Uni-Grams
+
+```{r unigram, warning=FALSE}
+wordcloud(names(total.n1), freq = total.n1, min.freq = 10, max.words = 50, random.order = FALSE, colors = brewer.pal(3,"Set1"),scale=c(3,0.5))
+
+barplot(rev(total.n1 [1:20]), col="blue", las = 2, horiz = TRUE, main = "Top-20 Unigrams with Highest Frequency")
+```
+
+#### Bi-Grams
+
+
+```{r bigram, warning=FALSE}
+wordcloud(names(total.n2), freq = total.n2, min.freq = 10, max.words = 50, random.order = FALSE, colors = brewer.pal(3,"Set1"),scale=c(3,0.5))
+
+barplot(rev(total.n2 [1:20]), col="blue", las = 2, horiz = TRUE, main = "Top-20 Bigrams with Highest Frequency")
+
+```
+
+#### Tri-Grams
+
+```{r trigram, warning=FALSE}
+wordcloud(names(total.n3), freq = total.n3, min.freq = 10, max.words = 50, random.order = FALSE, colors = brewer.pal(3,"Set1"),scale=c(3,0.5))
+
+barplot(rev(total.n3 [1:20]), col="blue", las = 2, horiz = TRUE, main = "Top-20 Trigrams with Highest Frequency")
+```
+
+
+#### Quadri-Grams
+
+```{r quadrigram, warning=FALSE}
+wordcloud(names(total.n4), freq = total.n4, min.freq = 10, max.words = 50, random.order = FALSE, colors = brewer.pal(3,"Set1"),scale=c(3,0.5))
+
+barplot(rev(total.n4 [1:20]), col="blue", las = 2, horiz = TRUE, main = "Top-20 Quadrigrams with Highest Frequency")
+```
+
+Overall,the results are as expected. However the "limited set" Unigrams with high frequencies is even more limited than I thought beforehand. The trigrams wordcloud shows terms that make me want to rethink some cleaning rules (e.g. "it s a", "i don t").
+
+
+## Next Steps
+
+1. Cleaning
++ Cleaning apostrophs and periods needs improvement
++ Removing profanity / swear words should be implemented
+
+2. Performance: this proved to be an issue. I should find some methods to be able to load and process more data.
+
+3. Create tables for unigrams, bigrams and trigrams (perhaps even quadrigrams) with calculated maximum likelihood estimations. Optimize search performance!
+
+4. Investigate how to handle unknown, "out-of-vocabulary" words.
+
+5. Investigate & select a smoothing method that handles known words that appear in an unseen context.
+
+6. Create a model that predicts words based on n-grams.
+
+7. Train & test the model, evaluate different options.
+
+8. Build Shiny app
