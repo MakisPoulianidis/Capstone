@@ -1,6 +1,6 @@
 ################################################################################
 # 04_CalculateMLE.R
-# 27-04-2016
+# 27-03-2016
 # version 1 : initial version 
 # version 2 : moved creation of search tables to new script
 ################################################################################
@@ -75,19 +75,19 @@ gc()
 # Calculate Maximum-Likelihood Estimation ---------------------------------
 
 ## Join tables for Wx with Wx-1 & calculate MLE
-
 mle.n2 <-
         dplyr::inner_join(table.n1,table.n2, by = c("w1" = "w1")) %>% mutate(mle = counts.y /
                                                                                      counts.x) %>% select(w1,w2, text.x, text.y, counts.x, counts.y,mle)
 
+## Join tables for Wx with Wx-1 & calculate MLE
 mle.n3 <-
         dplyr::inner_join(table.n2,table.n3, by = c("w1" = "w1","w2" = "w2")) %>%
         mutate(mle = counts.y / counts.x) %>% select(w1,w2,w3, text.x, text.y, counts.x, counts.y,mle)
 
+## Join tables for Wx with Wx-1 & calculate MLE
 mle.n4 <-
         dplyr::inner_join(table.n3,table.n4, by = c("w1" = "w1","w2" = "w2","w3" =
                                                             "w3")) %>% mutate(mle = counts.y / counts.x) %>% select(w1,w2,w3,w4, text.x, text.y, counts.x, counts.y,mle)
-
 
 # Cleanup -----------------------------------------------------------------
 

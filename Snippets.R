@@ -253,3 +253,20 @@ search.mle.n3[,] %>% group_by(input) %>% mutate (rank = row_number(-smle))})
 search.mle.n3[,rank:=rank(-smle,ties.method="first"),by=input]
 
 system.time({test<-search.mle.n3[,rank:=rank(-smle,ties.method="first"),by=input]})
+
+
+ALS
+        Lengte == 3
+DAN
+        check quadrigram
+        ALS
+                quadrigram = ok
+        DAN
+                return quadrigram
+        ANDERS
+                check trigram
+                ALS
+                        bigram 2 = ok
+                DAN
+                return bigram 3 
+

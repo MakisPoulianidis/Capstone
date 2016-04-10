@@ -1,12 +1,12 @@
 ################################################################################
 # 02_SampleData.R
-# 26-05-2016
+# 26-03-2016
 # version 1 : initial version extracted form milestone report .Rmd
 # version 2 : made sample percentage variable
 ################################################################################
 
 ## SET SAMPLE FRACTION (e.g 0.10 = 10%)
-y <- 0.40
+y <- 0.50
 
 
 # Read Datasets -----------------------------------------------------------
